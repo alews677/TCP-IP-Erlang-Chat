@@ -1,0 +1,4 @@
+*.beam
+/bin/
+/test/
+app_*
