@@ -7,27 +7,18 @@
 %%% Created : 05 Jul 2025 by Ale <poli.ale.ws@gmail.com>
 %%%-------------------------------------------------------------------
 -module(server).
-
 -export([start/0]).
 
 start() ->
-    io:format("Server is starting...."),
-    spawn(connection, init, [1234]),
-    loop(0).
+    Port = 1234,
+    Opts = [{active, true}, {reuseaddr, true}, {reuseport, true}, {packet, 0}],
+    {ok, ListenSocket} = gen_tcp:listen(Port, Opts),
+    io:format("Server listening on port ~p~n", [Port]),
+    accept_loop(ListenSocket).
 
-loop(Connections) ->
-    receive
-        spawned when Connections < 100 ->
-            spawn(connection, init, [1234]),
-            loop(Connections + 1);
-        spawned when Connections > 10 ->
-            app ! {error, 100},
-            loop(Connections);
-        {tcp_closed, Pid} ->
-            exit(Pid, kill),
-            loop(Connections-1);
-        {error, Reason} ->
-            error("An error occurred becouse ~p~n", [Reason])
-    end.
-
-
+accept_loop(ListenSocket) ->
+    {ok, Socket} = gen_tcp:accept(ListenSocket),
+    Pid = spawn(connection, loop, [Socket]),
+    gen_tcp:controlling_process(Socket, Pid),
+    app ! {server, "client connected, pid: " ++ pid_to_list(Pid)},
+    accept_loop(ListenSocket).

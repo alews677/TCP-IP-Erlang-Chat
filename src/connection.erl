@@ -7,35 +7,50 @@
 %%% Created : 05 Jul 2025 by Ale <poli.ale.ws@gmail.com>
 %%%-------------------------------------------------------------------
 -module(connection).
--export([init/1]).
+-export([loop/1, response/2]).
 
-init(Port) ->
-    connect(Port).
-
-connect(Port) ->
-    Opts0 = [{active, true}, {reuseaddr, true}, {reuseport, true}, {packet, 0}],
-    {ok, ListenSocket} = gen_tcp:listen(Port, Opts0),
-    _Socket = accept(ListenSocket),
-    %app ! hi,
-    loop().
-
-accept(ListenSocket) ->
-    {ok, Socket} = gen_tcp:accept(ListenSocket),
-    gen_tcp:close(ListenSocket),
-    server ! spawned,
-    Socket.
-
-loop() ->
+%%
+%% 
+%% 
+loop(Socket) ->
     receive
-        {tcp, _Socket, Data} ->
-            io:format("Received data: ~p~n", [Data]),
-            loop();
-        {tcp_closed, Socket} ->
-            io:format("Client disconnected.~n"),
-            gen_tcp:close(Socket),
-            server ! {tcp_closed, self()};
-        {tcp_error, Socket, Reason} ->
+        {tcp, RecSocket, Data} when RecSocket == Socket ->
+            FormatData = string:trim(unicode:characters_to_list(Data)),
+            Lines = string:split(FormatData, " ", all),
+            handle(RecSocket, Lines),
+            loop(Socket);
+        {tcp, _, _} ->
+            app ! {server, "Wrong socket"};
+        {tcp_closed, _} ->
+            io:format("Client ~p disconnected.~n", [Socket]),
+            app ! {tcp_closed, self()};
+        {tcp_error, _, Reason} ->
             io:format("Socket error: ~p~n", [Reason]),
-            gen_tcp:close(Socket),
-            server ! {tcp_closed, self()}
+            servapper ! {tcp_error, self()}
     end.
+
+%%
+%% 
+%% 
+response(Socket, Packet) ->
+    gen_tcp:send(Socket, Packet ++ "\r\n").
+
+%%
+%% 
+%% 
+help(Socket) ->
+    response(Socket, "Commands:~n help - show this help~n exit - close connection~n say <something> ~n").
+
+
+%%
+%% Command
+%% 
+handle(Socket, [Line | _]) when Line == "exit" ->
+    gen_tcp:close(Socket),
+    server ! {tcp_closed, self()};
+handle(Socket, [Line | _]) when Line == "help" ->
+    help(Socket);
+handle(Socket, [Line | Msg]) when Line == "say" ->
+    response(Socket, "User said: " ++ Msg);
+handle(Socket, _) ->
+    response(Socket, "Unknown command. Type 'help'.").
