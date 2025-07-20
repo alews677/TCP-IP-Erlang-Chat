@@ -39,18 +39,18 @@ response(Socket, Packet) ->
 %% 
 %% 
 help(Socket) ->
-    response(Socket, "Commands:~n help - show this help~n exit - close connection~n say <something> ~n").
+    response(Socket, "Commands:\n $help - show this help\n $exit - close connection\n $say <something> \n").
 
 
 %%
 %% Command
 %% 
-handle(Socket, [Line | _]) when Line == "exit" ->
+handle(Socket, [Line | _]) when Line == "$exit" ->
     gen_tcp:close(Socket),
     server ! {tcp_closed, self()};
-handle(Socket, [Line | _]) when Line == "help" ->
+handle(Socket, [Line | _]) when Line == "$help" ->
     help(Socket);
-handle(Socket, [Line | Msg]) when Line == "say" ->
-    response(Socket, "User said: " ++ Msg);
+handle(Socket, [Line | Msg]) when Line == "$say" ->
+    response(Socket, "User said: " ++ string:join(Msg, " "));
 handle(Socket, _) ->
-    response(Socket, "Unknown command. Type 'help'.").
+    response(Socket, "Unknown command. Type '$help'. \n").
