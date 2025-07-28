@@ -7,12 +7,16 @@
    - macOS: `brew install erlang`
    - Windows: [erlang.org/downloads](https://www.erlang.org/downloads)
 
-2. **Compile**
+2. **Download the project from Github**
+   - Unzip it
+   - Open it
+   
+4. **Compile**
    ```bash
    mkdir -p bin
    erlc src/*.erl -o bin
 
-3. **Run**
+5. **Run**
     ```bash
     erl
     ### in the erlang shell
