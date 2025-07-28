@@ -2,55 +2,95 @@
 %%% @author Ale <poli.ale.ws@gmail.com>
 %%% @copyright (C) 2025, Ale
 %%% @doc
-%%%
+%%%         This module menage a single connection to a socket
 %%% @end
 %%% Created : 05 Jul 2025 by Ale <poli.ale.ws@gmail.com>
 %%%-------------------------------------------------------------------
 -module(connection).
--export([loop/1, response/2]).
 
-%%
-%% 
-%% 
-loop(Socket) ->
+-export([init/1]).
+
+-record(state, {socket, room, username}).
+
+init(Socket) ->
+    State = #state{socket = Socket},
+    loop(State).
+
+loop(State) ->
     receive
-        {tcp, RecSocket, Data} when RecSocket == Socket ->
-            FormatData = string:trim(unicode:characters_to_list(Data)),
-            Lines = string:split(FormatData, " ", all),
-            handle(RecSocket, Lines),
-            loop(Socket);
+        {tcp, Socket, Data} when Socket == State#state.socket ->
+            %%io:format("Username ~p, Room ~p~n", [State#state.username, State#state.room]),
+            NewState = format(State, Data),
+            loop(NewState);
         {tcp, _, _} ->
             app ! {server, "Wrong socket"};
         {tcp_closed, _} ->
-            io:format("Client ~p disconnected.~n", [Socket]),
             app ! {tcp_closed, self()};
-        {tcp_error, _, Reason} ->
-            io:format("Socket error: ~p~n", [Reason]),
-            servapper ! {tcp_error, self()}
+        {tcp_error, _, _Reason} ->
+            app ! {tcp_error, self()};
+        {room_message, Text} ->
+            NewState = response(State, Text),
+            loop(NewState)
     end.
 
-%%
-%% 
-%% 
-response(Socket, Packet) ->
-    gen_tcp:send(Socket, Packet ++ "\r\n").
+format(State, Data) ->
+    io:format("Data :~p~n", [Data]),
+    FormatData = unicode:characters_to_list(Data),
+    TrimmedData = string:trim(FormatData),
+    io:format("TrimmedData :~p~n", [TrimmedData]),
+    case TrimmedData of
+        [] ->
+            State;
+        _ ->
+            case string:prefix(TrimmedData, "$") of
+                nomatch when State#state.room =/= undefined ->
+                    room_manager ! {message, State#state.room, self(), TrimmedData},
+                    State;
+                nomatch ->
+                    handle(State, {message, TrimmedData});
+                _ ->
+                    Lines = string:split(TrimmedData, " ", all),
+                    handle(State, {command, Lines})
+            end
+    end.
 
-%%
-%% 
-%% 
-help(Socket) ->
-    response(Socket, "Commands:\n $help - show this help\n $exit - close connection\n $say <something> \n").
+handle(State, {command, Lines}) ->
+    case Lines of
+        ["$help" | _] ->
+            New = help(State);
+        ["$join" | Room] when Room =/= [] ->
+            New = join(State, Room);
+        ["$exit" | _] ->
+            exit,
+            New = State;
+        ["$username" | Username] when Username =/= [] ->
+            New = State#state{username = Username};
+        _ ->
+            New = response(State, "Command unknown or uncompleted")
+    end,
+    New;
+handle(State, {message, Data}) ->
+    response(State, "User said: " ++ Data).
 
+response(State, Packet) ->
+    case gen_tcp:send(State#state.socket, Packet ++ "\r\n") of
+        ok -> State;
+        {error, Reason} ->
+            io:format("Send failed: ~p~n", [Reason]),
+            exit(Reason)
+    end.
 
-%%
-%% Command
-%% 
-handle(Socket, [Line | _]) when Line == "$exit" ->
-    gen_tcp:close(Socket),
-    server ! {tcp_closed, self()};
-handle(Socket, [Line | _]) when Line == "$help" ->
-    help(Socket);
-handle(Socket, [Line | Msg]) when Line == "$say" ->
-    response(Socket, "User said: " ++ string:join(Msg, " "));
-handle(Socket, _) ->
-    response(Socket, "Unknown command. Type '$help'. \n").
+help(State) ->
+    response(State,
+        "\n    Commands:\n"
+        "     $help - show this help\n"
+        "     $exit - close connection\n"
+        "     $join <room> - enter in a chat\n"
+        "     $username <name> - set your username\n"
+        "     $info - show your current username and room\n").
+
+join(State, Room) when State#state.username =/= undefined ->
+    room_manager ! {join, Room, self(), State#state.username},
+    State#state{room = Room};
+join(State, _) ->
+    response(State, "You must first add a username").

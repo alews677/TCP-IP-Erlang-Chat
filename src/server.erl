@@ -18,7 +18,7 @@ start() ->
 
 accept_loop(ListenSocket) ->
     {ok, Socket} = gen_tcp:accept(ListenSocket),
-    Pid = spawn(connection, loop, [Socket]),
+    Pid = spawn(connection, init, [Socket]),
     gen_tcp:controlling_process(Socket, Pid),
     app ! {server, "client connected, pid: " ++ pid_to_list(Pid)},
     accept_loop(ListenSocket).

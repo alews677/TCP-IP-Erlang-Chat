@@ -15,6 +15,8 @@ start() ->
     register(app, Pid).
 
 init() ->
+    RoomManager = spawn(room_manager, loop, [[]]),
+    register(room_manager, RoomManager),
     Server = spawn(server, start, []),
     register(server, Server),
     loop().
@@ -24,10 +26,12 @@ loop() ->
         {server, Data} ->
             io:format("Server: ~s~n", [Data]),
             loop();
+
         {tcp_closed, Pid} ->
             io:format("Connection closed by ~p~n", [Pid]),
             exit(Pid),
             loop();
+
         {tcp_error, Pid} ->
             io:format("An error came from ~p~n", [Pid]),
             exit(Pid),
