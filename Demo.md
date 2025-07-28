@@ -13,7 +13,7 @@
    erlc src/*.erl -o bin
 
 3. **Run**
-```bash
-   erl
-   ### in the erlang shell
-   app:start().
+    ```bash
+    erl
+    ### in the erlang shell
+    app:start().
