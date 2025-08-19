@@ -65,6 +65,9 @@ handle(State, {command, Lines}) ->
             New = State;
         ["$username" | Username] when Username =/= [] ->
             New = State#state{username = Username};
+        ["$info" | _] ->
+            New = info(State);
+        
         _ ->
             New = response(State, "Command unknown or uncompleted")
     end,
@@ -94,3 +97,9 @@ join(State, Room) when State#state.username =/= undefined ->
     State#state{room = Room};
 join(State, _) ->
     response(State, "You must first add a username").
+
+info(State)  when State#state.username =/= undefined andalso State#state.room =/= undefined->
+    Temp = "Your username is " ++ State#state.username ++ " \n and your room is " ++ State#state.room,
+    response(State, Temp);
+info(State) ->
+    response(State, "Username or room not specified").
